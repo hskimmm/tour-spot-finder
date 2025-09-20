@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>관광지 검색 & 지도</title>
+    <style>
+        body { margin: 0; font-family: Arial, sans-serif; background: #f5f5f5; }
+        #main { display: flex; height: 100vh; }
+
+        /* 사이드바 */
+        #sidebar {
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #ddd;
+            box-sizing: border-box;
+            overflow-y: auto;
+            background: #ffffff;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        /* 검색창 */
+        #search-bar {
+            padding: 12px;
+            background: #fafafa;
+            display: flex;
+            border-bottom: 1px solid #eee;
+            box-shadow: inset 0 -1px 0 #eee;
+        }
+        #search-bar input {
+            flex: 1;
+            padding: 10px 12px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        #search-bar input:focus {
+            border-color: #00bfa5;
+        }
+        #search-bar button {
+            padding: 10px 16px;
+            margin-left: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #00bfa5;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+        #search-bar button:hover {
+            background: #009e88;
+        }
+
+        /* 관광지 리스트 */
+        #list { flex: 1; overflow-y: auto; padding: 8px; }
+        .tour-item {
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            border-radius: 12px;
+            cursor: pointer;
+            background: #fdfdfd;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .tour-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            background: #e0f7fa;
+        }
+        .tour-item.active {
+            border-left: 4px solid #00bfa5;
+            background: #e0f7fa;
+        }
+
+        .tour-title {
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tour-address {
+            font-size: 14px;
+            color: #555;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* 지도 */
+        #map { flex: 1; }
+
+        /* 스크롤바 꾸미기 */
+        #sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+        #sidebar::-webkit-scrollbar-thumb {
+            background-color: rgba(0,0,0,0.2);
+            border-radius: 3px;
+        }
+        #sidebar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+    </style>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=557bf66ba4e25d48329cf76b3c0166f5&libraries=services"></script>
+</head>
+<body>
+
+<div id="main">
+    <div id="sidebar">
+        <div id="search-bar">
+            <input type="text" id="keyword" placeholder="관광지 검색" />
+            <button id="search-btn">검색</button>
+        </div>
+        <div id="list"></div>
+    </div>
+    <div id="map"></div>
+</div>
+
+<script>
+    const mapContainer = document.getElementById('map');
+    const mapOption = { center: new kakao.maps.LatLng(37.5665, 126.9780), level: 5 };
+    const map = new kakao.maps.Map(mapContainer, mapOption);
+
+    const ps = new kakao.maps.services.Places();
+    const listContainer = $('#list');
+
+    let mainMarker = null;
+    let openInfoWindow = null;
+    let nearbyMarkers = [];
+    let currentMainPlace = null;
+    let currentTourData = null;
+
+    // 리스트 하이라이트
+    function highlightList(index) {
+        $('.tour-item').each(function(i) {
+            $(this).toggleClass('active', i === index);
+        });
+    }
+
+    // 파란색 마커
+    function createMainInfoWindowContent(place, imgUrl) {
+        return `
+                <div style="
+                    display:flex; align-items:flex-start; padding:12px; min-width:370px; max-width:500px;
+                    border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.15);
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    background:#ffffff; color:#333; line-height:1.5;">
+
+                    <div style="flex:1; padding-right:10px;">
+                        <div style="
+                            font-weight:bold; font-size:16px; margin-bottom:6px; color:#00bfa5;
+                            white-space: normal;
+                        ">
+                            ${place.place_name}
+                        </div>
+                        <div style="
+                            font-size:14px; color:#555; margin-bottom:4px;
+                            white-space: normal;
+                        ">
+                            ${place.address_name || '주소 없음'}
+                        </div>
+                        ${place.phone ? `<div style="
+                            font-size:14px; color:#555; margin-bottom:6px;
+                            white-space: normal;
+                        ">전화: ${place.phone}</div>` : ''}
+                        <div style="text-align:left; margin-top:6px;">
+                            <a href="https://place.map.kakao.com/${place.id}" target="_blank" style="
+                                font-size:13px; color:#00bfa5; text-decoration:none; font-weight:600;
+                            ">
+                                상세보기 ▶
+                            </a>
+                        </div>
+                    </div>
+                    ${imgUrl ? `<div style="width:100px; height:100px; flex-shrink:0;">
+                        <img src="${imgUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" />
+                    </div>` : ''}
+                </div>
+               `;
+    }
+
+    // 파란색 마커 클릭 이벤트 함수
+    function addMainMarkerClickEvent(marker, place, tourData) {
+        kakao.maps.event.addListener(marker, 'click', function() {
+            if(openInfoWindow) openInfoWindow.close();
+
+            const infoWindow = new kakao.maps.InfoWindow({
+                content: createMainInfoWindowContent(place, tourData.filename ? `/images/${tourData.filename}` : null)
+            });
+            infoWindow.open(map, marker);
+            openInfoWindow = infoWindow;
+        });
+    }
+
+    //노란색 마커(주변 관광지)
+    function showNearbyTours(lat, lng, mainTourData) { // mainTourData 추가
+        nearbyMarkers.forEach(m => m.setMap(null));
+        nearbyMarkers = [];
+
+        const radius = 500;
+        const categoryCode = 'AT4';
+
+        ps.categorySearch(categoryCode, function(result, status) {
+            if(status === kakao.maps.services.Status.OK) {
+                result.forEach(place => {
+                    if(Math.abs(parseFloat(place.y)-lat)<0.00001 && Math.abs(parseFloat(place.x)-lng)<0.00001) return;
+
+                    const nearbyMarker = new kakao.maps.Marker({
+                        map: map,
+                        position: new kakao.maps.LatLng(place.y, place.x),
+                        title: place.place_name,
+                        image: new kakao.maps.MarkerImage(
+                            'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png',
+                            new kakao.maps.Size(24,35)
+                        )
+                    });
+                    nearbyMarkers.push(nearbyMarker);
+
+                    //노란색 마커 정보 HTML
+                    const infoWindow = new kakao.maps.InfoWindow({
+                        content: `
+                        <div style="
+                            padding:10px 14px; font-size:14px; color:#333;
+                            background:#fff; border-radius:8px;
+                            box-shadow:0 2px 6px rgba(0,0,0,0.15);
+                            line-height:1.4; min-width:200px; max-width:400px;
+                            white-space: normal;
+                        ">
+                            <div style="font-weight:bold; color:#00bfa5; margin-bottom:4px;">
+                                ${place.place_name}
+                            </div>
+                            <div style="color:#555; margin-bottom:4px;">
+                                ${place.address_name || '주소 없음'}
+                            </div>
+                            <div style="text-align:left; margin-top:6px;">
+                                <a href="https://place.map.kakao.com/${place.id}" target="_blank" style="
+                                    font-size:13px; color:#00bfa5; text-decoration:none; font-weight:600;
+                                ">상세보기 ▶</a>
+                            </div>
+                        </div>
+                    `
+                    });
+
+                    kakao.maps.event.addListener(nearbyMarker, 'click', function() {
+                        if(openInfoWindow) openInfoWindow.close();
+                        infoWindow.open(map, nearbyMarker);
+                        openInfoWindow = infoWindow;
+                    });
+                });
+            }
+        }, { x: lng, y: lat, radius: radius });
+    }
+
+
+    //관광지 리스트
+    function loadTourList(keyword='') {
+        listContainer.empty();
+
+        $.ajax({
+            url:'/api/tours',
+            type:'GET',
+            data:{ keyword },
+            dataType:'json',
+            success:function(data){
+                if(data.length===0){
+                    listContainer.html('<p style="padding:10px;">검색 결과가 없습니다.</p>');
+                    return;
+                }
+
+                data.forEach((tour, idx)=>{
+                    const item = $('<div class="tour-item"></div>')
+                        .attr('data-title', tour.title)
+                        .attr('data-address', tour.address);
+                    const titleDiv = $('<div class="tour-title"></div>').text(tour.title);
+                    const addressDiv = $('<div class="tour-address"></div>').text(tour.address);
+                    item.append(titleDiv, addressDiv);
+                    listContainer.append(item);
+
+                    (function(tourCopy, idxCopy){
+                        ps.keywordSearch(tourCopy.title, function(result,status){
+                            if(status===kakao.maps.services.Status.OK && result[0]){
+                                const place = result[0];
+                                const lat = parseFloat(place.y);
+                                const lng = parseFloat(place.x);
+
+                                item.on('click', function(){
+                                    const position = new kakao.maps.LatLng(lat,lng);
+                                    map.setCenter(position);
+                                    highlightList(idxCopy);
+
+                                    currentMainPlace = place;
+                                    currentTourData = tourCopy;
+
+                                    if(mainMarker) mainMarker.setMap(null);
+
+                                    mainMarker = new kakao.maps.Marker({
+                                        map: map,
+                                        position: position
+                                    });
+
+                                    addMainMarkerClickEvent(mainMarker, place, tourCopy);
+
+                                    if(openInfoWindow) openInfoWindow.close();
+                                    const selectedInfoWindow = new kakao.maps.InfoWindow({
+                                        content:createMainInfoWindowContent(place, tourCopy.filename ? `/images/${tourCopy.filename}` : null)
+                                    });
+                                    selectedInfoWindow.open(map, mainMarker);
+                                    openInfoWindow = selectedInfoWindow;
+
+                                    showNearbyTours(lat,lng);
+                                });
+                            }
+                        });
+                    })(tour, idx);
+                });
+            },
+            error:function(err){
+                console.error(err);
+                listContainer.html('<p style="padding:10px;">데이터를 가져오는 중 오류가 발생했습니다.</p>');
+            }
+        });
+    }
+
+    $('#search-btn').on('click', function(){
+        const keyword = $('#keyword').val().trim();
+        loadTourList(keyword);
+    });
+    $('#keyword').on('keyup', function(e){
+        if(e.key==='Enter') $('#search-btn').click();
+    });
+
+    //init
+    $(document).ready(function(){
+        loadTourList();
+    });
+</script>
+</body>
+</html>
