@@ -18,5 +18,17 @@ public class Travel {
     private String phone;
 
     private int travelNo;
+
     private String filename;
+
+    public String[] getFilenameArray() {
+        if (filename == null || filename.isEmpty()) {
+            return new String[0];
+        }
+        return filename.split(",");
+    }
+
+    public String[] getFilenameList() {
+        return getFilenameArray();
+    }
 }

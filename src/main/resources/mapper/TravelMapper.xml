@@ -14,11 +14,19 @@
     </sql>
 
     <select id="list" resultType="com.spring.travel.domain.Travel">
-        select a.no, a.district, a.title, a.description, a.address, a.phone, b.travel_no as travelNo, b.filename
-        from travel a
-        inner join travel_image b
-        on a.no = b.travel_no
+        SELECT
+        a.no,
+        a.district,
+        a.title,
+        a.description,
+        a.address,
+        a.phone,
+        GROUP_CONCAT(b.filename ORDER BY b.filename SEPARATOR ',') as filename
+        FROM travel a
+        INNER JOIN travel_image b ON a.no = b.travel_no
         WHERE a.no > 0
         <include refid="search"/>
+        GROUP BY a.no, a.district, a.title, a.description, a.address, a.phone
+        ORDER BY a.no
     </select>
 </mapper>
