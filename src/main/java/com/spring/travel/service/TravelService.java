@@ -7,4 +7,6 @@ import java.util.List;
 
 public interface TravelService {
     List<Travel> list(Pagination pagination);
+
+    int count(Pagination pagination);
 }

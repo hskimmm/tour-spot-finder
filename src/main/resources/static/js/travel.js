@@ -4,6 +4,7 @@ const map = new kakao.maps.Map(mapContainer, mapOption); //카카오맵 객체 �
 
 const ps = new kakao.maps.services.Places(); //장소 검색 서비스 객체
 const listContainer = $('#list'); //리스트 표시할 컨테이너 선택
+const pageContainer = $("#pagination"); //페이지 컨테이너 선택
 
 let mainMarker = null; //파란색 마커(메인)
 let openInfoWindow = null; //현재 알림 정보창
@@ -266,21 +267,21 @@ function showNearbyTours(lat, lng, mainTourData) {
 }
 
 // 관광지 리스트
-function loadTourList(keyword = '') {
+function loadTourList(keyword = '', pageNum = 1) {
     listContainer.empty();
 
     $.ajax({
         url: '/api/tours',
         type: 'GET',
-        data: { keyword },
+        data: { keyword, pageNum },
         dataType: 'json',
         success: function (data) {
-            if (data.length === 0) {
+            if (data.travels.length === 0) {
                 listContainer.html('<p style="padding:10px;">검색 결과가 없습니다.</p>');
                 return;
             }
 
-            data.forEach((tour, idx) => {
+            data.travels.forEach((tour, idx) => {
                 const item = $('<div class="tour-item"></div>')
                     .attr('data-title', tour.title)
                     .attr('data-address', tour.address);
@@ -326,13 +327,49 @@ function loadTourList(keyword = '') {
                     });
                 })(tour, idx);
             });
+
+            //페이징
+            renderPagination(data.pageDTO);
         },
         error: function (err) {
-            console.error(err);
             listContainer.html('<p style="padding:10px;">데이터를 가져오는 중 오류가 발생했습니다.</p>');
         }
     });
 }
+
+//페이징
+function renderPagination(pageDTO) {
+    const page = pageDTO;
+    const startPage = page.startPage;
+    const endPage = page.endPage;
+    const next = page.next;
+    const prev = page.prev;
+    const pageNum = page.pagination.pageNum;
+
+    let pageStr = '<ul style="list-style:none; display:flex; gap:8px; padding:0; margin:0; justify-content:center;">';
+
+    if (prev) {
+        pageStr += `<li class="page-item"><a class="page-link" href="${startPage - 1}" tabindex="-1">Prev</a></li>`
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        pageStr += `<li class="page-item ${i === pageNum ? 'active':''}"><a class="page-link" href="${i}">${i}</a></li>`;
+    }
+
+    if (next) {
+        pageStr += `<li class="page-item"> <a class="page-link" href="${endPage + 1}">Next</a> </li>`;
+    }
+
+    pageStr += '</ul>';
+    pageContainer.html(pageStr);
+}
+
+pageContainer.on("click", "a", function (e) {
+    e.preventDefault();
+    const pageNum = $(this).attr('href');
+    const keyword = $('#keyword').val().trim();
+    loadTourList(keyword, pageNum);
+});
 
 $('#search-btn').on('click', function () {
     const keyword = $('#keyword').val().trim();

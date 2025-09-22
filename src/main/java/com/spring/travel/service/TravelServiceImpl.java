@@ -31,4 +31,18 @@ public class TravelServiceImpl implements TravelService{
             throw new RuntimeException("관광지 목록 조회 중 오류가 발생하였습니다");
         }
     }
+
+    @Transactional(readOnly = true)
+    @Override
+    public int count(Pagination pagination) {
+        try {
+            return travelMapper.count(pagination);
+        } catch (DataAccessException e) {
+            log.error("전체 데이터 개수 조회(데이터베이스 오류) = {}", e.getMessage());
+            throw new RuntimeException("전체 데이터 개수 조회 중 오류가 발생하였습니다");
+        } catch (Exception e) {
+            log.error("전체 데이터 개수 조회(기타 오류) = {}", e.getMessage());
+            throw new RuntimeException("전체 데이터 개수 조회 중 오류가 발생하였습니다");
+        }
+    }
 }

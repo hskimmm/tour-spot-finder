@@ -7,10 +7,10 @@ import lombok.ToString;
 @Getter
 @ToString
 public class PageDTO {
-    private int startPage; //시작 페이지 번호
-    private int endPage; //마지막 페이지 번호
-    private boolean prev, next; //이전, 다음 버튼
-    private int total; //전체 데이터의 개수
+    private int startPage; // 시작 페이지 번호
+    private int endPage;   // 마지막 페이지 번호
+    private boolean prev, next; // 이전, 다음 버튼
+    private int total;     // 전체 데이터 개수
     private Pagination pagination;
 
     public PageDTO(Pagination pagination, int total) {
@@ -25,11 +25,11 @@ public class PageDTO {
             return;
         }
 
-        this.endPage = (int) (Math.ceil(pagination.getPageNum() / 10.0)) * 10;
-        this.startPage = endPage - 9;
+        int blockSize = 5;
+        this.endPage = (int) (Math.ceil(pagination.getPageNum() / (double) blockSize)) * blockSize;
+        this.startPage = endPage - (blockSize - 1);
 
         int realEnd = (int) Math.ceil((total * 1.0) / pagination.getAmount());
-
         if (realEnd <= this.endPage) {
             this.endPage = realEnd;
         }
