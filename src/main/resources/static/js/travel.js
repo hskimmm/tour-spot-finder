@@ -278,6 +278,7 @@ function loadTourList(keyword = '', pageNum = 1) {
         success: function (data) {
             if (data.travels.length === 0) {
                 listContainer.html('<p style="padding:10px;">검색 결과가 없습니다.</p>');
+                pageContainer.empty();
                 return;
             }
 
